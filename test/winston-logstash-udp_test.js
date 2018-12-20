@@ -1,45 +1,40 @@
-process.env.NODE_ENV = 'test';
+// @ts-check
+process.env.NODE_ENV = "test";
 
-var chai = require('chai'),
-    sinon = require('sinon'),
-    sinonChai = require('sinon-chai'),
+var chai = require("chai"),
+    sinon = require("sinon"),
+    sinonChai = require("sinon-chai"),
     expect = chai.expect,
-    dgram = require('dgram'),
-    winston = require('winston'),
-    timekeeper = require('timekeeper'),
-    os = require('os'),
-    common = require('winston/lib/winston/common'),
+    dgram = require("dgram"),
+    winston = require("winston"),
+    os = require("os"),
     freezed_time = new Date(1330688329321),
-
-    testingPort = 9988
-    ;
+    testingPort = 9988;
 
 chai.config.includeStack = true;
-chai.should();
 chai.use(sinonChai);
 
-require('../lib/winston-logstash-udp');
+const logstashUdp = require("../lib/winston-logstash-udp").default;
 
-describe('winston-logstash-udp transport', function () {
-    var test_server, commonLogStored, port = testingPort;
+const repeatFormatter = {
+    transform: sinon.stub().returns({
+        [Symbol.for("message")]: '{"what":"ever"}' + "\r\n\t ",
+    }),
+};
+
+describe("winston-logstash-udp transport", function() {
+    var port = testingPort;
 
     function createTestServer(port, onMessage, udpType) {
-        udpType = udpType || 'udp4';
+        udpType = udpType || "udp4";
         var server = dgram.createSocket(udpType);
 
-        server.on("error", function (err) {
-            console.log("server error:\n" + err.stack);
+        server.on("error", function(err) {
+            console.error("server error:\n" + err.stack);
             server.close();
         });
 
         server.on("message", onMessage);
-
-        server.on("listening", function () {
-            var address = server.address();
-            console.log("server listening " +
-                address.address + ":" + address.port);
-        });
-
         server.bind(port);
 
         return server;
@@ -47,203 +42,228 @@ describe('winston-logstash-udp transport', function () {
 
     function createLogger(port, options) {
         var defaultOptions = {
-            port: port,
-            appName: 'test',
-            localhost: 'localhost',
-            pid: 12345
-        },
-        options = options || {},
-        field;
+                port: port,
+                appName: "test",
+                localhost: "localhost",
+                pid: 12345,
+            },
+            options = options || {},
+            field;
 
         for (field in defaultOptions) {
-            if (defaultOptions.hasOwnProperty(field) && !options.hasOwnProperty(field)) {
+            if (
+                defaultOptions.hasOwnProperty(field) &&
+                !options.hasOwnProperty(field)
+            ) {
                 options[field] = defaultOptions[field];
             }
         }
 
-        return new (winston.Logger)({
-            transports: [
-                new (winston.transports.LogstashUDP)(options)
-            ]
+        return winston.createLogger({
+            transports: [new logstashUdp(options)],
         });
     }
 
-    describe('with logstash server (udp4)', function () {
-        var test_server, port = testingPort;
+    describe("with logstash server (udp4)", function() {
+        let test_server;
+        const port = testingPort;
+        let clock;
 
-        beforeEach(function (done) {
-            timekeeper.freeze(freezed_time);
+        beforeEach(function(done) {
+            clock = sinon.useFakeTimers(freezed_time.valueOf());
             done();
         });
 
-        it('send logs over UDP as valid json', function (done) {
+        it("send logs over UDP as valid json", function(done) {
             var response;
             var logger = createLogger(port);
-            var expected = {"stream": "sample", "application": "test", "serverName": "localhost", "pid": 12345, "level": "info", "message": "hello world"};
+            var expected = {
+                ["@timestamp"]: freezed_time.toISOString(),
+                ["@version"]: 1,
+                stream: "sample",
+                application: "test",
+                serverName: "localhost",
+                pid: 12345,
+                level: "info",
+                message: "hello world",
+            };
 
-            test_server = createTestServer(port, function (data) {
+            test_server = createTestServer(port, function(data) {
                 response = JSON.parse(data);
                 expect(response).to.be.eql(expected);
                 done();
             });
 
-            logger.log('info', 'hello world', {stream: 'sample'});
+            logger.log("info", "hello world", { stream: "sample" });
         });
 
-        describe('with the option \'trailing line-feed\' on', function () {
-
-            before(function () {
-                commonLogStored = common.log;
-                common.log = sinon.stub().returns('{"what":"ever"}' + "\r\n\t ");
+        describe("with the option 'trailing line-feed' on", function() {
+            let originalFormatter = logstashUdp["formatter"];
+            before(function() {
+                logstashUdp["formatter"] = repeatFormatter;
             });
 
-            it('remove all trailing blank characters and replace them with the operating system\'s EOL character', function (done) {
-                var logger = createLogger(
-                    port,
-                    {
-                        trailingLineFeed: true
-                    }
-                );
+            it("remove all trailing blank characters and replace them with the operating system's EOL character", function(done) {
+                var logger = createLogger(port, {
+                    trailingLineFeed: true,
+                });
 
-                common.log = sinon.stub().returns('{"what":"ever"}' + "\r\n\t ");
-
-                test_server = createTestServer(port, function (data) {
-                    expect(data.toString()).to.be.eql('{"what":"ever"}' + os.EOL);
+                test_server = createTestServer(port, function(data) {
+                    expect(data.toString()).to.be.eql(
+                        '{"what":"ever"}' + os.EOL
+                    );
                     done();
                 });
 
-                logger.log('info', 'hello world', {stream: 'sample'});
+                logger.log("info", "hello world", { stream: "sample" });
             });
 
-            it('if set in the options, remove all trailing blank characters and replace them with a custom character', function (done) {
-                var logger = createLogger(
-                    port,
-                    {
-                        trailingLineFeed: true,
-                        trailingLineFeedChar: os.EOL + "\n"
-                    }
-                );
+            it("if set in the options, remove all trailing blank characters and replace them with a custom character", function(done) {
+                var logger = createLogger(port, {
+                    trailingLineFeed: true,
+                    trailingLineFeedChar: os.EOL + "\n",
+                });
 
-                test_server = createTestServer(port, function (data) {
-                    expect(data.toString()).to.be.eql('{"what":"ever"}' + os.EOL + "\n");
+                test_server = createTestServer(port, function(data) {
+                    expect(data.toString()).to.be.eql(
+                        '{"what":"ever"}' + os.EOL + "\n"
+                    );
                     done();
                 });
 
-                logger.log('info', 'hello world', {stream: 'sample'});
+                logger.log("info", "hello world", { stream: "sample" });
             });
 
-            after(function () {
-                common.log = commonLogStored;
+            after(function() {
+                logstashUdp["formatter"] = originalFormatter;
             });
         });
 
         // Teardown
-        afterEach(function () {
+        afterEach(function() {
             if (test_server) {
-                test_server.close(function () {
-                });
+                test_server.close(function() {});
             }
-            timekeeper.reset();
+            clock.restore();
             test_server = null;
         });
-
     });
 
     //TODO: run IPv6 tests in travis when it supports it (at the time of this comment it does not)
     if (!process.env.TRAVIS) {
-        describe('with logstash server (udp6)', function () {
-            var test_server, port = testingPort;
+        describe("with logstash server (udp6)", function() {
+            let test_server;
+            const port = testingPort;
+            let clock;
 
-            beforeEach(function (done) {
-                timekeeper.freeze(freezed_time);
+            beforeEach(function(done) {
+                clock = sinon.useFakeTimers(freezed_time.valueOf());
                 done();
             });
 
-            it('send logs over UDP as valid json', function (done) {
+            it("send logs over UDP as valid json", function(done) {
                 var response;
                 var logger = createLogger(port, {
-                    udpType : 'udp6'
+                    udpType: "udp6",
                 });
-                var expected = {"stream": "sample", "application": "test", "serverName": "localhost", "pid": 12345, "level": "info", "message": "hello world"};
+                var expected = {
+                    stream: "sample",
+                    application: "test",
+                    serverName: "localhost",
+                    pid: 12345,
+                    level: "info",
+                    message: "hello world",
+                    ["@timestamp"]: freezed_time.toISOString(),
+                    ["@version"]: 1,
+                };
 
-                test_server = createTestServer(port, function (data) {
-                    response = JSON.parse(data);
-                    expect(response).to.be.eql(expected);
-                    done();
-                }, 'udp6');
+                test_server = createTestServer(
+                    port,
+                    function(data) {
+                        response = JSON.parse(data);
+                        expect(response).to.be.eql(expected);
+                        done();
+                    },
+                    "udp6"
+                );
 
-                logger.log('info', 'hello world', {stream: 'sample'});
+                logger.log("info", "hello world", { stream: "sample" });
             });
 
-            describe('with the option \'trailing line-feed\' on', function () {
-
-                before(function () {
-                    commonLogStored = common.log;
-                    common.log = sinon.stub().returns('{"what":"ever"}' + "\r\n\t ");
+            describe("with the option 'trailing line-feed' on", function() {
+                let originalFormatter = logstashUdp["formatter"];
+                before(function() {
+                    logstashUdp["formatter"] = repeatFormatter;
                 });
 
-                it('remove all trailing blank characters and replace them with the operating system\'s EOL character', function (done) {
-                    var logger = createLogger(
+                it("remove all trailing blank characters and replace them with the operating system's EOL character", function(done) {
+                    var logger = createLogger(port, {
+                        trailingLineFeed: true,
+                        udpType: "udp6",
+                    });
+
+                    test_server = createTestServer(
                         port,
-                        {
-                            trailingLineFeed: true,
-                            udpType : 'udp6'
-                        }
+                        function(data) {
+                            expect(data.toString()).to.be.eql(
+                                '{"what":"ever"}' + os.EOL
+                            );
+                            done();
+                        },
+                        "udp6"
                     );
 
-                    test_server = createTestServer(port, function (data) {
-                        expect(data.toString()).to.be.eql('{"what":"ever"}' + os.EOL);
-                        done();
-                    }, 'udp6');
-
-                    logger.log('info', 'hello world', {stream: 'sample'});
+                    logger.log("info", "hello world", { stream: "sample" });
                 });
 
-                it('if set in the options, remove all trailing blank characters and replace them with a custom character', function (done) {
-                    var logger = createLogger(
+                it("if set in the options, remove all trailing blank characters and replace them with a custom character", function(done) {
+                    var logger = createLogger(port, {
+                        trailingLineFeed: true,
+                        trailingLineFeedChar: os.EOL + "\n",
+                        udpType: "udp6",
+                    });
+
+                    test_server = createTestServer(
                         port,
-                        {
-                            trailingLineFeed: true,
-                            trailingLineFeedChar: os.EOL + "\n",
-                            udpType : 'udp6'
-                        }
+                        function(data) {
+                            expect(data.toString()).to.be.eql(
+                                '{"what":"ever"}' + os.EOL + "\n"
+                            );
+                            done();
+                        },
+                        "udp6"
                     );
 
-                    test_server = createTestServer(port, function (data) {
-                        expect(data.toString()).to.be.eql('{"what":"ever"}' + os.EOL + "\n");
-                        done();
-                    }, 'udp6');
-
-                    logger.log('info', 'hello world', {stream: 'sample'});
+                    logger.log("info", "hello world", { stream: "sample" });
                 });
 
-                after(function () {
-                    common.log = commonLogStored;
+                after(function() {
+                    logstashUdp["formatter"] = originalFormatter;
                 });
-
             });
 
             // Teardown
-            afterEach(function () {
+            afterEach(function() {
                 if (test_server) {
-                    test_server.close(function () {
-                    });
+                    test_server.close(function() {});
                 }
-                timekeeper.reset();
+                clock.restore();
                 test_server = null;
             });
-
         });
     }
 
-    describe('without logstash server', function () {
-        it('return an error message if UDP DNS errors occur on the socket', function (done) {
-            var logger = createLogger(port, {host: 'unresolvedhost'});
+    describe("without logstash server", function() {
+        this.timeout("15s");
+        it("return an error message if UDP DNS errors occur on the socket", function(done) {
+            var logger = createLogger(port, { host: "unresolvedhost" });
 
-            logger.log('info', 'hello world', {stream: 'sample'}, function (err) {
+            logger.on("error", err => {
                 expect(err).to.be.an.instanceof(Error);
                 done();
             });
+
+            logger.log("info", "hello world", { stream: "sample" });
         });
     });
 });

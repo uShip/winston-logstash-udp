@@ -1,46 +1,66 @@
 {
     "name": "winston-logstash-udp",
-    "version": "0.2.1",
+    "version": "0.3.0",
     "description": "A Logstash UDP transport for winston",
     "main": "./lib/winston-logstash-udp",
-    "homepage": "https://github.com/sazze/winston-logstash-udp",
+    "homepage": "https://github.com/uShip/winston-logstash-udp",
     "scripts": {
-        "test": "mocha test/*_test.js"
+        "build": "tsc",
+        "test": "run-s build test:run",
+        "test:run": "mocha test/*_test.js",
+        "type-check": "tsc --noEmit",
+        "sample": "node example/test-log.js",
+        "format": "prettier --write {lib,test}/**/*.{ts,js}"
     },
     "engines": {
-        "node": ">=0.8.x",
-        "npm": ">=1.4.6"
+        "node": ">=8.x",
+        "npm": ">=5.x"
     },
     "repository": {
         "type": "git",
-        "url": "https://github.com/sazze/winston-logstash-udp.git"
+        "url": "https://github.com/uShip/winston-logstash-udp.git"
+    },
+    "peerDependencies": {
+        "winston": "3.x"
     },
     "dependencies": {
-        "cycle": "^1.0.3",
-        "winston": ">=0.7.2"
+        "json-cycle": "^1.3.0"
     },
     "devDependencies": {
+        "@types/node": "^10.12.18",
+        "@types/winston": "^2.4.4",
         "chai": ">=1.5.0",
         "mocha": ">=1.8.2",
+        "npm-run-all": "^4.1.5",
+        "prettier": "1.15.3",
+        "rollup": "^0.68.1",
         "sinon": "^1.17.7",
-        "sinon-chai": "~2.8.0",
-        "timekeeper": ">=0.0.3",
-        "winston": ">=0.7.2"
+        "sinon-chai": "^2.8.0",
+        "typescript": "^3.2.2",
+        "winston": "^3.1.0",
+        "winston-transport": "^4.2.0"
     },
     "keywords": [
         "logging",
         "sysadmin",
-        "tools"
+        "tools",
+        "winston",
+        "logstash",
+        "udp"
     ],
     "bugs": {
-        "url": "https://github.com/sazze/winston-logstash-udp/issues"
+        "url": "https://github.com/uShip/winston-logstash-udp/issues"
     },
     "author": {
-        "name": "Craig Thayer",
-        "email": "cthayer@sazze.com"
+        "name": "Richard Simpson",
+        "email": "rsimpson@uship.com"
     },
     "license": "MIT",
     "contributors": [
+        {
+            "name": "Richard Simpson",
+            "email": "rsimpson@uship.com"
+        },
         {
             "name": "Craig Thayer",
             "email": "cthayer@sazze.com"
@@ -75,8 +95,12 @@
     ],
     "maintainers": [
         {
-            "name": "Craig Thayer",
-            "email": "cthayer@sazze.com"
+            "name": "Richard Simpson",
+            "email": "rsimpson@uship.com"
         }
-    ]
+    ],
+    "prettier": {
+        "tabWidth": 4,
+        "trailingComma": "es5"
+    }
 }

@@ -13,11 +13,11 @@ Usage
 Recommended method:
 ``` js
     var winston = require('winston'),
-        LogstashUDP = require('winston-logstash-udp').LogstashUDP;
+        LogstashUDP = require('winston-logstash-udp').default;
 
     var logger = new(winston.Logger)({
       transports: [
-        new(LogstashUDP)({
+        new LogstashUDP({
           port: 9999,
           appName: 'my application name',
           host: '127.0.0.1'
@@ -26,28 +26,11 @@ Recommended method:
     });
 ```
 
-Alternate method:
-``` js
-    var winston = require('winston');
-
-    //
-    // Requiring `winston-logstash-udp` will expose
-    // `winston.transports.LogstashUDP`
-    //
-    require('winston-logstash-udp');
-
-    winston.add(winston.transports.LogstashUDP, {
-      port: 9999,
-      appName: 'my application name',
-      host: '127.0.0.1'
-    });
-```
-
 ### Logstash
 ``` ruby
     input {
       # Sample input over UDP
-      udp { format => "json" port => 9999 type => "sample" }
+      udp { codec => "json" port => 9999 type => "sample" }
     }
     output {
       stdout { debug => true debug_format => "json"}
@@ -61,26 +44,7 @@ Run Tests
   npm test
 ```
 
-Troubleshooting
-====================
-
-* **I get an error when installing node packages *"ERR! Error: No compatible version found: assertion-error@'^1.0.1'"***
-
-  If you are running a version of NodeJS less than or equal to 0.8, upgrading NPM to a version greater than or equal to 1.4.6 should solve this issue.
-
-  ```
-  npm install -g npm@~1.4.6
-  ```
-
-  Another way around is to simply avoid installing the development dependencies:
-
-  ```
-  npm install --production
-  ```
-
-====================
-
-#### Author: [Craig Thayer](https://github.com/sazze)
+#### Author: [Richard Simpson](https://github.com/uShip)
 
 #### License: MIT
 
